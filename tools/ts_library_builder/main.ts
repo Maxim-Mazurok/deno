@@ -12,7 +12,6 @@ let debug = false;
 let silent = false;
 
 process.argv.forEach((arg, i, argv) => {
-  // tslint:disable-next-line:switch-default
   switch (arg) {
     case "--basePath":
       basePath = path.resolve(argv[i + 1]);
@@ -42,6 +41,11 @@ buildRuntimeLib({
   buildPath,
   debug,
   inline,
+  inputs: [
+    "node_modules/typescript/lib/lib.esnext.d.ts",
+    "js/deno.ts",
+    "js/globals.ts"
+  ],
   outFile,
   silent
 });

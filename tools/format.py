@@ -3,11 +3,9 @@
 from glob import glob
 import os
 import sys
-from third_party import fix_symlinks, google_env, python_env
+from third_party import google_env, python_env
 from third_party import clang_format_path, third_party_path
 from util import root_path, run, find_exts, platform
-
-fix_symlinks()
 
 prettier = os.path.join(third_party_path, "node_modules", "prettier",
                         "bin-prettier.js")
@@ -39,7 +37,7 @@ qrun(
 print "prettier"
 qrun(["node", prettier, "--write", "--loglevel=error"] + ["rollup.config.js"] +
      glob("*.json") + glob("*.md") +
-     find_exts([".github", "js", "tests", "tools", "website"],
+     find_exts([".github", "js", "tests", "tools", "website", "core"],
                [".js", ".json", ".ts", ".md"],
                skip=["tools/clang", "js/deps"]))
 
@@ -47,4 +45,4 @@ print "rustfmt"
 qrun([
     "third_party/rustfmt/" + platform() +
     "/rustfmt", "--config-path", rustfmt_config, "build.rs"
-] + find_exts(["src"], [".rs"]))
+] + find_exts(["cli", "core"], [".rs"]))

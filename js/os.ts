@@ -1,8 +1,9 @@
 // Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
 import * as msg from "gen/msg_generated";
+import { window } from "./window";
 import { handleAsyncMsgFromRust, sendSync } from "./dispatch";
 import * as flatbuffers from "./flatbuffers";
-import { libdeno } from "./libdeno";
+import { TextDecoder } from "./text_encoding";
 import { assert } from "./util";
 import * as util from "./util";
 
@@ -27,7 +28,7 @@ export function setGlobals(
   execPath = execPath_;
 }
 
-interface CodeInfo {
+interface ResponseModuleMetaData {
   moduleName: string | undefined;
   filename: string | undefined;
   mediaType: msg.MediaType;
@@ -60,61 +61,51 @@ export function exit(exitCode = 0): never {
   return util.unreachable();
 }
 
+const decoder = new TextDecoder();
+
 // @internal
-export function codeFetch(specifier: string, referrer: string): CodeInfo {
-  util.log("os.codeFetch", { specifier, referrer });
-  // Send CodeFetch message
+export function fetchModuleMetaData(
+  specifier: string,
+  referrer: string
+): ResponseModuleMetaData {
+  util.log("os.fetchModuleMetaData", { specifier, referrer });
+  // Send FetchModuleMetaData message
   const builder = flatbuffers.createBuilder();
   const specifier_ = builder.createString(specifier);
   const referrer_ = builder.createString(referrer);
-  msg.CodeFetch.startCodeFetch(builder);
-  msg.CodeFetch.addSpecifier(builder, specifier_);
-  msg.CodeFetch.addReferrer(builder, referrer_);
-  const inner = msg.CodeFetch.endCodeFetch(builder);
-  const baseRes = sendSync(builder, msg.Any.CodeFetch, inner);
+  msg.FetchModuleMetaData.startFetchModuleMetaData(builder);
+  msg.FetchModuleMetaData.addSpecifier(builder, specifier_);
+  msg.FetchModuleMetaData.addReferrer(builder, referrer_);
+  const inner = msg.FetchModuleMetaData.endFetchModuleMetaData(builder);
+  const baseRes = sendSync(builder, msg.Any.FetchModuleMetaData, inner);
   assert(baseRes != null);
   assert(
-    msg.Any.CodeFetchRes === baseRes!.innerType(),
+    msg.Any.FetchModuleMetaDataRes === baseRes!.innerType(),
     `base.innerType() unexpectedly is ${baseRes!.innerType()}`
   );
-  const codeFetchRes = new msg.CodeFetchRes();
-  assert(baseRes!.inner(codeFetchRes) != null);
+  const fetchModuleMetaDataRes = new msg.FetchModuleMetaDataRes();
+  assert(baseRes!.inner(fetchModuleMetaDataRes) != null);
+  const dataArray = fetchModuleMetaDataRes.dataArray();
+  const sourceCode = dataArray ? decoder.decode(dataArray) : undefined;
   // flatbuffers returns `null` for an empty value, this does not fit well with
   // idiomatic TypeScript under strict null checks, so converting to `undefined`
   return {
-    moduleName: codeFetchRes.moduleName() || undefined,
-    filename: codeFetchRes.filename() || undefined,
-    mediaType: codeFetchRes.mediaType(),
-    sourceCode: codeFetchRes.sourceCode() || undefined
+    moduleName: fetchModuleMetaDataRes.moduleName() || undefined,
+    filename: fetchModuleMetaDataRes.filename() || undefined,
+    mediaType: fetchModuleMetaDataRes.mediaType(),
+    sourceCode
   };
 }
 
-// @internal
-export function codeCache(
-  filename: string,
-  sourceCode: string,
-  outputCode: string,
-  sourceMap: string
-): void {
-  util.log("os.codeCache", {
-    filename,
-    sourceCodeLength: sourceCode.length,
-    outputCodeLength: outputCode.length,
-    sourceMapLength: sourceMap.length
-  });
+function setEnv(key: string, value: string): void {
   const builder = flatbuffers.createBuilder();
-  const filename_ = builder.createString(filename);
-  const sourceCode_ = builder.createString(sourceCode);
-  const outputCode_ = builder.createString(outputCode);
-  const sourceMap_ = builder.createString(sourceMap);
-  msg.CodeCache.startCodeCache(builder);
-  msg.CodeCache.addFilename(builder, filename_);
-  msg.CodeCache.addSourceCode(builder, sourceCode_);
-  msg.CodeCache.addOutputCode(builder, outputCode_);
-  msg.CodeCache.addSourceMap(builder, sourceMap_);
-  const inner = msg.CodeCache.endCodeCache(builder);
-  const baseRes = sendSync(builder, msg.Any.CodeCache, inner);
-  assert(baseRes == null); // Expect null or error.
+  const _key = builder.createString(key);
+  const _value = builder.createString(value);
+  msg.SetEnv.startSetEnv(builder);
+  msg.SetEnv.addKey(builder, _key);
+  msg.SetEnv.addValue(builder, _value);
+  const inner = msg.SetEnv.endSetEnv(builder);
+  sendSync(builder, msg.Any.SetEnv, inner);
 }
 
 function createEnv(inner: msg.EnvironRes): { [index: string]: string } {
@@ -131,17 +122,6 @@ function createEnv(inner: msg.EnvironRes): { [index: string]: string } {
       return Reflect.set(obj, prop, value);
     }
   });
-}
-
-function setEnv(key: string, value: string): void {
-  const builder = flatbuffers.createBuilder();
-  const _key = builder.createString(key);
-  const _value = builder.createString(value);
-  msg.SetEnv.startSetEnv(builder);
-  msg.SetEnv.addKey(builder, _key);
-  msg.SetEnv.addValue(builder, _value);
-  const inner = msg.SetEnv.endSetEnv(builder);
-  sendSync(builder, msg.Any.SetEnv, inner);
 }
 
 /** Returns a snapshot of the environment variables at invocation. Mutating a
@@ -189,7 +169,7 @@ function sendStart(): msg.StartRes {
 // the runtime and the compiler environments.
 // @internal
 export function start(source?: string): msg.StartRes {
-  libdeno.recv(handleAsyncMsgFromRust);
+  window.DenoCore.setAsyncHandler(handleAsyncMsgFromRust);
 
   // First we send an empty `Start` message to let the privileged side know we
   // are ready. The response should be a `StartRes` message containing the CLI

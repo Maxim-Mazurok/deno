@@ -1,13 +1,10 @@
 // Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { DomIterable } from "../dom_types";
-import { globalEval } from "../global_eval";
+import { window } from "../window";
 import { requiredArguments } from "../util";
 
-// if we import it directly from "globals" it will break the unit tests so we
-// have to grab a reference to the global scope a different way
-const window = globalEval("this");
-
-// tslint:disable:no-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Constructor<T = {}> = new (...args: any[]) => T;
 
 /** Mixes in a DOM iterable methods into a base class, assumes that there is
@@ -16,7 +13,6 @@ type Constructor<T = {}> = new (...args: any[]) => T;
  * TODO Don't expose DomIterableMixin from "deno" namespace.
  */
 export function DomIterableMixin<K, V, TBase extends Constructor>(
-  // tslint:disable-next-line:variable-name
   Base: TBase,
   dataSymbol: symbol
 ): TBase & Constructor<DomIterable<K, V>> {
@@ -29,21 +25,23 @@ export function DomIterableMixin<K, V, TBase extends Constructor>(
   // Symbol.iterator, and some have an Array, which yields V, in this case
   // [K, V] too as they are arrays of tuples.
 
-  // tslint:disable-next-line:variable-name
   const DomIterable = class extends Base {
     *entries(): IterableIterator<[K, V]> {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const entry of (this as any)[dataSymbol]) {
         yield entry;
       }
     }
 
     *keys(): IterableIterator<K> {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const [key] of (this as any)[dataSymbol]) {
         yield key;
       }
     }
 
     *values(): IterableIterator<V> {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const [, value] of (this as any)[dataSymbol]) {
         yield value;
       }
@@ -51,7 +49,7 @@ export function DomIterableMixin<K, V, TBase extends Constructor>(
 
     forEach(
       callbackfn: (value: V, key: K, parent: this) => void,
-      // tslint:disable-next-line:no-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       thisArg?: any
     ): void {
       requiredArguments(
@@ -60,12 +58,14 @@ export function DomIterableMixin<K, V, TBase extends Constructor>(
         1
       );
       callbackfn = callbackfn.bind(thisArg == null ? window : Object(thisArg));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const [key, value] of (this as any)[dataSymbol]) {
         callbackfn(value, key, this);
       }
     }
 
     *[Symbol.iterator](): IterableIterator<[K, V]> {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const entry of (this as any)[dataSymbol]) {
         yield entry;
       }
@@ -80,4 +80,3 @@ export function DomIterableMixin<K, V, TBase extends Constructor>(
 
   return DomIterable;
 }
-// tslint:enable:no-any

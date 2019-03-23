@@ -1,16 +1,16 @@
 // Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
-import { test, assert, assertEqual } from "./test_util.ts";
+import { test, assert, assertEquals } from "./test_util.ts";
 
 test(function atobSuccess() {
   const text = "hello world";
   const encoded = btoa(text);
-  assertEqual(encoded, "aGVsbG8gd29ybGQ=");
+  assertEquals(encoded, "aGVsbG8gd29ybGQ=");
 });
 
 test(function btoaSuccess() {
   const encoded = "aGVsbG8gd29ybGQ=";
   const decoded = atob(encoded);
-  assertEqual(decoded, "hello world");
+  assertEquals(decoded, "hello world");
 });
 
 test(function btoaFailed() {
@@ -22,7 +22,7 @@ test(function btoaFailed() {
     err = e;
   }
   assert(!!err);
-  assertEqual(err.name, "InvalidInput");
+  assertEquals(err.name, "InvalidInput");
 });
 
 test(function textDecoder2() {
@@ -34,22 +34,22 @@ test(function textDecoder2() {
     0xf0, 0x9d, 0x93, 0xbd
   ]);
   const decoder = new TextDecoder();
-  assertEqual(decoder.decode(fixture), "𝓽𝓮𝔁𝓽");
+  assertEquals(decoder.decode(fixture), "𝓽𝓮𝔁𝓽");
 });
 
 test(function textDecoderASCII() {
   const fixture = new Uint8Array([0x89, 0x95, 0x9f, 0xbf]);
   const decoder = new TextDecoder("ascii");
-  assertEqual(decoder.decode(fixture), "‰•Ÿ¿");
+  assertEquals(decoder.decode(fixture), "‰•Ÿ¿");
 });
 
 test(function textDecoderErrorEncoding() {
   let didThrow = false;
   try {
-    const decoder = new TextDecoder("foo");
+    new TextDecoder("foo");
   } catch (e) {
     didThrow = true;
-    assertEqual(e.message, "The encoding label provided ('foo') is invalid.");
+    assertEquals(e.message, "The encoding label provided ('foo') is invalid.");
   }
   assert(didThrow);
 });
@@ -58,10 +58,36 @@ test(function textEncoder2() {
   const fixture = "𝓽𝓮𝔁𝓽";
   const encoder = new TextEncoder();
   // prettier-ignore
-  assertEqual(Array.from(encoder.encode(fixture)), [
+  assertEquals(Array.from(encoder.encode(fixture)), [
     0xf0, 0x9d, 0x93, 0xbd,
     0xf0, 0x9d, 0x93, 0xae,
     0xf0, 0x9d, 0x94, 0x81,
     0xf0, 0x9d, 0x93, 0xbd
   ]);
+});
+
+test(function textDecoderSharedUint8Array() {
+  const ab = new SharedArrayBuffer(6);
+  const dataView = new DataView(ab);
+  const charCodeA = "A".charCodeAt(0);
+  for (let i = 0; i < ab.byteLength; i++) {
+    dataView.setUint8(i, charCodeA + i);
+  }
+  const ui8 = new Uint8Array(ab);
+  const decoder = new TextDecoder();
+  const actual = decoder.decode(ui8);
+  assertEquals(actual, "ABCDEF");
+});
+
+test(function textDecoderSharedInt32Array() {
+  const ab = new SharedArrayBuffer(8);
+  const dataView = new DataView(ab);
+  const charCodeA = "A".charCodeAt(0);
+  for (let i = 0; i < ab.byteLength; i++) {
+    dataView.setUint8(i, charCodeA + i);
+  }
+  const i32 = new Int32Array(ab);
+  const decoder = new TextDecoder();
+  const actual = decoder.decode(i32);
+  assertEquals(actual, "ABCDEFGH");
 });

@@ -5,6 +5,7 @@
 
 import "./blob_test.ts";
 import "./buffer_test.ts";
+import "./build_test.ts";
 import "./chmod_test.ts";
 // TODO find a way to test the compiler with split snapshots
 // import "./compiler_test.ts";
@@ -22,13 +23,13 @@ import "./files_test.ts";
 import "./form_data_test.ts";
 import "./globals_test.ts";
 import "./headers_test.ts";
+import "./location_test.ts";
 import "./make_temp_dir_test.ts";
 import "./metrics_test.ts";
 import "./mixins/dom_iterable_test.ts";
 import "./mkdir_test.ts";
 import "./net_test.ts";
 import "./os_test.ts";
-import "./platform_test.ts";
 import "./process_test.ts";
 import "./read_dir_test.ts";
 import "./read_file_test.ts";
@@ -44,7 +45,9 @@ import "./url_test.ts";
 import "./url_search_params_test.ts";
 import "./write_file_test.ts";
 import "./performance_test.ts";
+import "./permissions_test.ts";
+import "./version_test.ts";
 
 import "../website/app_test.js";
 
-import "deps/https/deno.land/x/std/testing/main.ts";
+import "deps/https/deno.land/std/testing/main.ts";

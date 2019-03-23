@@ -1,12 +1,12 @@
 // Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
-import { test, assert, assertEqual } from "./test_util.ts";
+import { test, assert, assertEquals } from "./test_util.ts";
 
-function testFirstArgument(arg1, expectedSize) {
+function testFirstArgument(arg1, expectedSize): void {
   const file = new File(arg1, "name");
   assert(file instanceof File);
-  assertEqual(file.name, "name");
-  assertEqual(file.size, expectedSize);
-  assertEqual(file.type, "");
+  assertEquals(file.name, "name");
+  assertEquals(file.size, expectedSize);
+  assertEquals(file.type, "");
 }
 
 test(function fileEmptyFileBits() {
@@ -22,7 +22,6 @@ test(function fileUnicodeStringFileBits() {
 });
 
 test(function fileStringObjectFileBits() {
-  // tslint:disable-next-line no-construct
   testFirstArgument([new String("string object")], 13);
 });
 
@@ -77,10 +76,10 @@ test(function fileObjectInFileBits() {
   testFirstArgument([{}], 15);
 });
 
-function testSecondArgument(arg2, expectedFileName) {
+function testSecondArgument(arg2, expectedFileName): void {
   const file = new File(["bits"], arg2);
   assert(file instanceof File);
-  assertEqual(file.name, expectedFileName);
+  assertEquals(file.name, expectedFileName);
 }
 
 test(function fileUsingFileName() {

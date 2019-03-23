@@ -2,24 +2,36 @@
 # Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
 import third_party
 from util import build_mode, build_path, enable_ansi_colors, root_path, run
-from util import shell_quote
+from util import shell_quote, run_output
 import os
 import re
 import sys
 from distutils.spawn import find_executable
 import prebuilt
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--no-binary-download",
+    help="Do not download binaries, must use depot_tools manually",
+    action="store_true")
 
 
 def main():
     enable_ansi_colors()
-
     os.chdir(root_path)
 
-    third_party.fix_symlinks()
-    third_party.download_gn()
-    third_party.download_clang_format()
-    third_party.download_clang()
-    third_party.maybe_download_sysroot()
+    args = parser.parse_args()
+
+    if args.no_binary_download:
+        print "no binary download"
+    else:
+        print "binary download"
+        third_party.download_gn()
+        third_party.download_clang_format()
+        third_party.download_clang()
+        third_party.maybe_download_sysroot()
+
     write_lastchange()
 
     mode = build_mode(default=None)

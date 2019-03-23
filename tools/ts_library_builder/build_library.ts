@@ -1,4 +1,5 @@
 import { writeFileSync } from "fs";
+import { join } from "path";
 import * as prettier from "prettier";
 import {
   ExpressionStatement,
@@ -8,10 +9,11 @@ import {
   ts,
   Type,
   TypeGuards
-} from "ts-simple-ast";
+} from "ts-morph";
 import {
   addInterfaceProperty,
   addSourceComment,
+  addTypeAlias,
   addVariableDeclaration,
   checkDiagnostics,
   flattenNamespace,
@@ -19,10 +21,11 @@ import {
   inlineFiles,
   loadDtsFiles,
   loadFiles,
+  log,
   logDiagnostics,
   namespaceSourceFile,
   normalizeSlashes,
-  addTypeAlias
+  setSilent
 } from "./ast_util";
 
 export interface BuildLibraryOptions {
@@ -47,6 +50,10 @@ export interface BuildLibraryOptions {
    */
   inline?: string[];
 
+  /** An array of input files to be provided to the input project, relative to
+   * the basePath. */
+  inputs?: string[];
+
   /**
    * The path to the output library
    */
@@ -63,7 +70,6 @@ const { ModuleKind, ModuleResolutionKind, ScriptTarget } = ts;
 /**
  * A preamble which is appended to the start of the library.
  */
-// tslint:disable-next-line:max-line-length
 const libPreamble = `// Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
 
 /// <reference no-default-lib="true" />
@@ -320,26 +326,32 @@ export function main({
   basePath,
   buildPath,
   inline,
+  inputs,
   debug,
   outFile,
   silent
 }: BuildLibraryOptions): void {
-  if (!silent) {
-    console.log("-----");
-    console.log("build_lib");
-    console.log();
-    console.log(`basePath: "${basePath}"`);
-    console.log(`buildPath: "${buildPath}"`);
-    if (inline && inline.length) {
-      console.log(`inline:`);
-      for (const filename of inline) {
-        console.log(`  "${filename}"`);
-      }
+  setSilent(silent);
+  log("-----");
+  log("build_lib");
+  log();
+  log(`basePath: "${basePath}"`);
+  log(`buildPath: "${buildPath}"`);
+  if (inline && inline.length) {
+    log("inline:");
+    for (const filename of inline) {
+      log(`  "${filename}"`);
     }
-    console.log(`debug: ${!!debug}`);
-    console.log(`outFile: "${outFile}"`);
-    console.log();
   }
+  if (inputs && inputs.length) {
+    log("inputs:");
+    for (const input of inputs) {
+      log(`  "${input}"`);
+    }
+  }
+  log(`debug: ${!!debug}`);
+  log(`outFile: "${outFile}"`);
+  log();
 
   // the inputProject will take in the TypeScript files that are internal
   // to Deno to be used to generate the library
@@ -348,10 +360,9 @@ export function main({
       baseUrl: basePath,
       declaration: true,
       emitDeclarationOnly: true,
-      lib: [],
-      module: ModuleKind.AMD,
+      lib: ["esnext"],
+      module: ModuleKind.ESNext,
       moduleResolution: ModuleResolutionKind.NodeJs,
-      noLib: true,
       paths: {
         "*": ["*", `${buildPath}/*`]
       },
@@ -365,20 +376,23 @@ export function main({
   // Add the input files we will need to generate the declarations, `globals`
   // plus any modules that are importable in the runtime need to be added here
   // plus the `lib.esnext` which is used as the base library
-  inputProject.addExistingSourceFiles([
-    `${basePath}/node_modules/typescript/lib/lib.esnext.d.ts`,
-    `${basePath}/js/deno.ts`,
-    `${basePath}/js/globals.ts`
-  ]);
+  if (inputs) {
+    inputProject.addExistingSourceFiles(
+      inputs.map(input => join(basePath, input))
+    );
+  }
 
   // emit the project, which will be only the declaration files
   const inputEmitResult = inputProject.emitToMemory();
+
+  log("Emitted input project.");
 
   const inputDiagnostics = inputEmitResult
     .getDiagnostics()
     .map(d => d.compilerObject);
   logDiagnostics(inputDiagnostics);
   if (inputDiagnostics.length) {
+    console.error("\nDiagnostics present during input project emit.\n");
     process.exit(1);
   }
 
@@ -388,8 +402,8 @@ export function main({
   const declarationProject = new Project({
     compilerOptions: {
       baseUrl: basePath,
+      lib: ["esnext"],
       moduleResolution: ModuleResolutionKind.NodeJs,
-      noLib: true,
       paths: {
         "*": ["*", `${buildPath}/*`]
       },
@@ -418,8 +432,8 @@ export function main({
   const outputProject = new Project({
     compilerOptions: {
       baseUrl: buildPath,
+      lib: ["esnext"],
       moduleResolution: ModuleResolutionKind.NodeJs,
-      noLib: true,
       strict: true,
       target: ScriptTarget.ESNext
     },
@@ -445,7 +459,7 @@ export function main({
 
   // Generate a object hash of substitutions of modules to use when flattening
   const customSources = {
-    [msgGeneratedDts.getFilePath()]: `${
+    [msgGeneratedDts.getFilePath().replace(/(\.d)?\.ts$/, "")]: `${
       debug ? getSourceComment(msgGeneratedDts, basePath) : ""
     }${msgGeneratedDtsText}\n`
   };
@@ -462,9 +476,7 @@ export function main({
     targetSourceFile: libDTs
   });
 
-  if (!silent) {
-    console.log(`Merged "globals" into global scope.`);
-  }
+  log(`Merged "globals" into global scope.`);
 
   flatten({
     basePath,
@@ -473,14 +485,11 @@ export function main({
     declarationProject,
     filePath: `${basePath}/js/deno.d.ts`,
     globalInterfaceName: "Window",
-    moduleName: `"deno"`,
     namespaceName: "Deno",
     targetSourceFile: libDTs
   });
 
-  if (!silent) {
-    console.log(`Created module "deno" and namespace Deno.`);
-  }
+  log(`Created module "deno" and namespace Deno.`);
 
   // Inline any files that were passed in, to be used to add additional libs
   // which are not part of TypeScript.

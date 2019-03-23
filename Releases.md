@@ -3,8 +3,95 @@
 Binary releases can be downloaded manually at
 https://github.com/denoland/deno/releases
 
-We also have a one-line install commands at
+We also have one-line install commands at
 https://github.com/denoland/deno_install
+
+### v0.3.4 / 2019.03.20
+
+In deno itself:
+
+- Performance improvements (#1959, #1938)
+- Improve pretty printing of objects (#1969)
+- More permissions prompt options (#1926)
+
+In deno_std:
+
+- Add prettier styling options (#281)
+- Extract internal method isSubdir to fs/utils.ts (#285)
+- Add strings/pad (#282)
+
+### v0.3.3 / 2019.03.13
+
+In deno itself:
+
+- Rename Deno.build.gnArgs to Deno.build.args (#1912, #1909)
+- Upgrade to TypeScript 3.3 (#1908)
+- Basic Arm64 support (#1887)
+- Remove builtin "deno" module, use Deno global var (#1895)
+- Improvements to internal deno_core crate (#1904, #1914)
+- Add --no-prompt flag for non-interactive environments (#1913)
+
+In deno_std
+
+- Add fs extras: ensureDir, ensireFile, readJson, emptyDir, move, exists (#269,
+  #266, #264, #263, #260)
+- Datetime module improvement (#259)
+- asserts: Add unimplemented, unreachable, assertNotEquals, assertArrayContains
+  (#246, #248)
+
+### v0.3.2 / 2019.03.06
+
+In deno itself:
+
+- Reorganize version and platform into Deno.build and Deno.version (#1879)
+- Allow inspection and revocation of permissions (#1875)
+- Fix unicode output on Windows (#1876)
+- Add Deno.build.gnArgs (#1845)
+- Fix security bug #1858 (#1864, #1874)
+- Replace deno.land/x/std links with deno.land/std/ (#1890)
+
+In deno_std:
+
+- Move asserts out of testing/mod.ts into testing/assert.ts Rename assertEqual
+  to assertEquals (#240, #242)
+- Update mime-db to 1.38.0 (#238)
+- Use pretty assertEqual in testing (#234)
+- Add eslint to CI (#235)
+- Refactor WebSockets (#173)
+- Allow for parallel testing (#224)
+- testing: use color module for displaying colors (#223)
+- Glob integration for the FS walker (#219)
+
+### v0.3.1 / 2019.02.27
+
+- Add import.meta.main (#1835)
+- Fix console.table display of Map (#1839)
+- New low-level Rust API (#1827)
+- Upgrade V8 to 7.4.238 (#1849)
+- Upgrade crates (#1848)
+
+### v0.3.0 / 2019.02.18
+
+The major API change in this release is that instead of importing a `"deno"`
+module, there is now a global variable called `Deno`. This allows code that does
+deno-specific stuff to still operate in browsers. We will remain backward
+compatible with the old way of importing core functionality, but it will be
+removed in the near future, so please update your code. See #1748 for more
+details.
+
+- Add Deno global namespace object (#1748)
+- Add window.location (#1761)
+- Add back typescript version number and add Deno.version object (#1788)
+- Add `seek` and implement `Seeker` on `File` (#1797)
+- Add Deno.execPath (#1743)
+- Fix behavior for extensionless files with .mime file (#1779)
+- Add env option in Deno.run (#1773)
+- Turn on `v8_postmortem_support` (#1758)
+- Upgrade V8 to 7.4.158 (#1767)
+- Use proper directory for cache files (#1763)
+- REPL multiline support with recoverable errors (#1731)
+- Respect `NO_COLOR` in TypeScript output (#1736)
+- Support scoped variables, unblock REPL async op, and REPL error colors (#1721)
 
 ### v0.2.11 / 2019.02.08
 

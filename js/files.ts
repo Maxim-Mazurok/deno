@@ -1,12 +1,99 @@
 // Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
-import { Reader, Writer, Closer, ReadResult } from "./io";
+import { Reader, Writer, Seeker, Closer, ReadResult, SeekMode } from "./io";
 import * as dispatch from "./dispatch";
 import * as msg from "gen/msg_generated";
 import { assert } from "./util";
 import * as flatbuffers from "./flatbuffers";
 
+/** Open a file and return an instance of the `File` object.
+ *
+ *       (async () => {
+ *         const file = await Deno.open("/foo/bar.txt");
+ *       })();
+ */
+export async function open(
+  filename: string,
+  mode: OpenMode = "r"
+): Promise<File> {
+  const builder = flatbuffers.createBuilder();
+  const filename_ = builder.createString(filename);
+  const mode_ = builder.createString(mode);
+  msg.Open.startOpen(builder);
+  msg.Open.addFilename(builder, filename_);
+  msg.Open.addMode(builder, mode_);
+  const inner = msg.Open.endOpen(builder);
+  const baseRes = await dispatch.sendAsync(builder, msg.Any.Open, inner);
+  assert(baseRes != null);
+  assert(msg.Any.OpenRes === baseRes!.innerType());
+  const res = new msg.OpenRes();
+  assert(baseRes!.inner(res) != null);
+  const rid = res.rid();
+  // eslint-disable-next-line @typescript-eslint/no-use-before-define
+  return new File(rid);
+}
+
+/** Read from a file ID into an array buffer.
+ *
+ * Resolves with the `ReadResult` for the operation.
+ */
+export async function read(rid: number, p: Uint8Array): Promise<ReadResult> {
+  const builder = flatbuffers.createBuilder();
+  msg.Read.startRead(builder);
+  msg.Read.addRid(builder, rid);
+  const inner = msg.Read.endRead(builder);
+  const baseRes = await dispatch.sendAsync(builder, msg.Any.Read, inner, p);
+  assert(baseRes != null);
+  assert(msg.Any.ReadRes === baseRes!.innerType());
+  const res = new msg.ReadRes();
+  assert(baseRes!.inner(res) != null);
+  return { nread: res.nread(), eof: res.eof() };
+}
+
+/** Write to the file ID the contents of the array buffer.
+ *
+ * Resolves with the number of bytes written.
+ */
+export async function write(rid: number, p: Uint8Array): Promise<number> {
+  const builder = flatbuffers.createBuilder();
+  msg.Write.startWrite(builder);
+  msg.Write.addRid(builder, rid);
+  const inner = msg.Write.endWrite(builder);
+  const baseRes = await dispatch.sendAsync(builder, msg.Any.Write, inner, p);
+  assert(baseRes != null);
+  assert(msg.Any.WriteRes === baseRes!.innerType());
+  const res = new msg.WriteRes();
+  assert(baseRes!.inner(res) != null);
+  return res.nbyte();
+}
+
+/** Seek a file ID to the given offset under mode given by `whence`.
+ *
+ */
+export async function seek(
+  rid: number,
+  offset: number,
+  whence: SeekMode
+): Promise<void> {
+  const builder = flatbuffers.createBuilder();
+  msg.Seek.startSeek(builder);
+  msg.Seek.addRid(builder, rid);
+  msg.Seek.addOffset(builder, offset);
+  msg.Seek.addWhence(builder, whence);
+  const inner = msg.Seek.endSeek(builder);
+  await dispatch.sendAsync(builder, msg.Any.Seek, inner);
+}
+
+/** Close the file ID. */
+export function close(rid: number): void {
+  const builder = flatbuffers.createBuilder();
+  msg.Close.startClose(builder);
+  msg.Close.addRid(builder, rid);
+  const inner = msg.Close.endClose(builder);
+  dispatch.sendSync(builder, msg.Any.Close, inner);
+}
+
 /** The Deno abstraction for reading and writing files. */
-export class File implements Reader, Writer, Closer {
+export class File implements Reader, Writer, Seeker, Closer {
   constructor(readonly rid: number) {}
 
   write(p: Uint8Array): Promise<number> {
@@ -15,6 +102,10 @@ export class File implements Reader, Writer, Closer {
 
   read(p: Uint8Array): Promise<ReadResult> {
     return read(this.rid, p);
+  }
+
+  seek(offset: number, whence: SeekMode): Promise<void> {
+    return seek(this.rid, offset, whence);
   }
 
   close(): void {
@@ -61,73 +152,4 @@ export type OpenMode =
  */
 export function create(filename: string): Promise<File> {
   return open(filename, "w+");
-}
-
-/** Open a file and return an instance of the `File` object.
- *
- *       (async () => {
- *         const file = await Deno.open("/foo/bar.txt");
- *       })();
- */
-export async function open(
-  filename: string,
-  mode: OpenMode = "r"
-): Promise<File> {
-  const builder = flatbuffers.createBuilder();
-  const filename_ = builder.createString(filename);
-  const mode_ = builder.createString(mode);
-  msg.Open.startOpen(builder);
-  msg.Open.addFilename(builder, filename_);
-  msg.Open.addMode(builder, mode_);
-  const inner = msg.Open.endOpen(builder);
-  const baseRes = await dispatch.sendAsync(builder, msg.Any.Open, inner);
-  assert(baseRes != null);
-  assert(msg.Any.OpenRes === baseRes!.innerType());
-  const res = new msg.OpenRes();
-  assert(baseRes!.inner(res) != null);
-  const rid = res.rid();
-  return new File(rid);
-}
-
-/** Read from a file ID into an array buffer.
- *
- * Resolves with the `ReadResult` for the operation.
- */
-export async function read(rid: number, p: Uint8Array): Promise<ReadResult> {
-  const builder = flatbuffers.createBuilder();
-  msg.Read.startRead(builder);
-  msg.Read.addRid(builder, rid);
-  const inner = msg.Read.endRead(builder);
-  const baseRes = await dispatch.sendAsync(builder, msg.Any.Read, inner, p);
-  assert(baseRes != null);
-  assert(msg.Any.ReadRes === baseRes!.innerType());
-  const res = new msg.ReadRes();
-  assert(baseRes!.inner(res) != null);
-  return { nread: res.nread(), eof: res.eof() };
-}
-
-/** Write to the file ID the contents of the array buffer.
- *
- * Resolves with the number of bytes written.
- */
-export async function write(rid: number, p: Uint8Array): Promise<number> {
-  const builder = flatbuffers.createBuilder();
-  msg.Write.startWrite(builder);
-  msg.Write.addRid(builder, rid);
-  const inner = msg.Write.endWrite(builder);
-  const baseRes = await dispatch.sendAsync(builder, msg.Any.Write, inner, p);
-  assert(baseRes != null);
-  assert(msg.Any.WriteRes === baseRes!.innerType());
-  const res = new msg.WriteRes();
-  assert(baseRes!.inner(res) != null);
-  return res.nbyte();
-}
-
-/** Close the file ID. */
-export function close(rid: number): void {
-  const builder = flatbuffers.createBuilder();
-  msg.Close.startClose(builder);
-  msg.Close.addRid(builder, rid);
-  const inner = msg.Close.endClose(builder);
-  dispatch.sendSync(builder, msg.Any.Close, inner);
 }

@@ -1,7 +1,12 @@
 // Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
-import { test, assertEqual } from "./test_util.ts";
+import { test, assertEquals } from "./test_util.ts";
 
-function deferred() {
+function deferred(): {
+  promise: Promise<{}>;
+  resolve: (value?: {} | PromiseLike<{}>) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  reject: (reason?: any) => void;
+} {
   let resolve;
   let reject;
   const promise = new Promise((res, rej) => {
@@ -15,7 +20,7 @@ function deferred() {
   };
 }
 
-function waitForMs(ms) {
+async function waitForMs(ms): Promise<number> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
@@ -28,7 +33,7 @@ test(async function timeoutSuccess() {
   }, 500);
   await promise;
   // count should increment
-  assertEqual(count, 1);
+  assertEquals(count, 1);
 });
 
 test(async function timeoutArgs() {
@@ -36,9 +41,9 @@ test(async function timeoutArgs() {
   const arg = 1;
   setTimeout(
     (a, b, c) => {
-      assertEqual(a, arg);
-      assertEqual(b, arg.toString());
-      assertEqual(c, [arg]);
+      assertEquals(a, arg);
+      assertEquals(b, arg.toString());
+      assertEquals(c, [arg]);
       resolve();
     },
     10,
@@ -58,10 +63,14 @@ test(async function timeoutCancelSuccess() {
   clearTimeout(id);
   // Wait a bit longer than 500ms
   await waitForMs(600);
-  assertEqual(count, 0);
+  assertEquals(count, 0);
 });
 
 test(async function timeoutCancelMultiple() {
+  function uncalled(): never {
+    throw new Error("This function should not be called.");
+  }
+
   // Set timers and cancel them in the same order.
   const t1 = setTimeout(uncalled, 10);
   const t2 = setTimeout(uncalled, 10);
@@ -80,10 +89,6 @@ test(async function timeoutCancelMultiple() {
 
   // Sleep until we're certain that the cancelled timers aren't gonna fire.
   await waitForMs(50);
-
-  function uncalled() {
-    throw new Error("This function should not be called.");
-  }
 });
 
 test(async function timeoutCancelInvalidSilentFail() {
@@ -97,7 +102,7 @@ test(async function timeoutCancelInvalidSilentFail() {
     resolve();
   }, 500);
   await promise;
-  assertEqual(count, 1);
+  assertEquals(count, 1);
 
   // Should silently fail (no panic)
   clearTimeout(2147483647);
@@ -120,7 +125,7 @@ test(async function intervalSuccess() {
   // Clear interval
   clearInterval(id);
   // count should increment twice
-  assertEqual(count, 2);
+  assertEquals(count, 2);
 });
 
 test(async function intervalCancelSuccess() {
@@ -132,23 +137,23 @@ test(async function intervalCancelSuccess() {
   clearInterval(id);
   // Wait a bit longer than 500ms
   await waitForMs(600);
-  assertEqual(count, 0);
+  assertEquals(count, 0);
 });
 
 test(async function intervalOrdering() {
   const timers = [];
   let timeouts = 0;
-  for (let i = 0; i < 10; i++) {
-    timers[i] = setTimeout(onTimeout, 20);
-  }
-  function onTimeout() {
+  function onTimeout(): void {
     ++timeouts;
     for (let i = 1; i < timers.length; i++) {
       clearTimeout(timers[i]);
     }
   }
+  for (let i = 0; i < 10; i++) {
+    timers[i] = setTimeout(onTimeout, 20);
+  }
   await waitForMs(100);
-  assertEqual(timeouts, 1);
+  assertEquals(timeouts, 1);
 });
 
 test(async function intervalCancelInvalidSilentFail() {
@@ -162,5 +167,5 @@ test(async function fireCallbackImmediatelyWhenDelayOverMaxValue() {
     count++;
   }, 2 ** 31);
   await waitForMs(1);
-  assertEqual(count, 1);
+  assertEquals(count, 1);
 });

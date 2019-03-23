@@ -1,14 +1,16 @@
 // Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
-// tslint:disable-next-line:no-reference
+
+// eslint-disable-next-line @typescript-eslint/no-triple-slash-reference
 /// <reference path="./plugins.d.ts" />
 
 import "./globals";
 
-import { log } from "./util";
+import { assert, log } from "./util";
 import * as os from "./os";
-import { libdeno } from "./libdeno";
 import { args } from "./deno";
 import { replLoop } from "./repl";
+import { setVersions } from "./version";
+import { setLocation } from "./location";
 
 // builtin modules
 import * as deno from "./deno";
@@ -16,20 +18,16 @@ import * as deno from "./deno";
 // TODO(kitsonk) remove with `--types` below
 import libDts from "gen/lib/lib.deno_runtime.d.ts!string";
 
-/* tslint:disable-next-line:no-default-export */
-export default function denoMain() {
+export default function denoMain(): void {
   const startResMsg = os.start();
 
-  // TODO(kitsonk) remove when import "deno" no longer supported
-  libdeno.builtinModules["deno"] = deno;
-  Object.freeze(libdeno.builtinModules);
+  setVersions(startResMsg.denoVersion()!, startResMsg.v8Version()!);
 
   // handle `--version`
   if (startResMsg.versionFlag()) {
-    console.log("deno:", startResMsg.denoVersion());
-    console.log("v8:", startResMsg.v8Version());
-    // TODO figure out a way to restore functionality
-    // console.log("typescript:", version);
+    console.log("deno:", deno.version.deno);
+    console.log("v8:", deno.version.v8);
+    console.log("typescript:", deno.version.typescript);
     os.exit(0);
   }
 
@@ -38,6 +36,12 @@ export default function denoMain() {
   if (startResMsg.typesFlag()) {
     console.log(libDts);
     os.exit(0);
+  }
+
+  const mainModule = startResMsg.mainModule();
+  if (mainModule) {
+    assert(mainModule.length > 0);
+    setLocation(mainModule);
   }
 
   const cwd = startResMsg.cwd();
@@ -49,8 +53,7 @@ export default function denoMain() {
   log("args", args);
   Object.freeze(args);
 
-  const inputFn = args[0];
-  if (!inputFn) {
+  if (!mainModule) {
     replLoop();
   }
 }

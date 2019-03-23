@@ -2,11 +2,7 @@
 import { assert } from "./util";
 import * as msg from "gen/msg_generated";
 import * as flatbuffers from "./flatbuffers";
-import { sendSync, setFireTimersCallback } from "./dispatch";
-
-// Tell the dispatcher which function it should call to fire timers that are
-// due. This is done using a callback because circular imports are disallowed.
-setFireTimersCallback(fireTimers);
+import { sendAsync, sendSync } from "./dispatch";
 
 interface Timer {
   id: number;
@@ -34,38 +30,49 @@ let nextTimerId = 1;
 const idMap = new Map<number, Timer>();
 const dueMap: { [due: number]: Timer[] } = Object.create(null);
 
-function getTime() {
+function getTime(): number {
   // TODO: use a monotonic clock.
   const now = Date.now() - EPOCH;
   assert(now >= 0 && now < APOCALYPSE);
   return now;
 }
 
-function setGlobalTimeout(due: number | null, now: number) {
+function clearGlobalTimeout(): void {
+  const builder = flatbuffers.createBuilder();
+  msg.GlobalTimerStop.startGlobalTimerStop(builder);
+  const inner = msg.GlobalTimerStop.endGlobalTimerStop(builder);
+  globalTimeoutDue = null;
+  let res = sendSync(builder, msg.Any.GlobalTimerStop, inner);
+  assert(res == null);
+}
+
+async function setGlobalTimeout(due: number, now: number): Promise<void> {
   // Since JS and Rust don't use the same clock, pass the time to rust as a
   // relative time value. On the Rust side we'll turn that into an absolute
   // value again.
-  // Note that a negative time-out value stops the global timer.
-  let timeout;
-  if (due === null) {
-    timeout = -1;
-  } else {
-    timeout = due - now;
-    assert(timeout >= 0);
-  }
+  let timeout = due - now;
+  assert(timeout >= 0);
 
   // Send message to the backend.
   const builder = flatbuffers.createBuilder();
-  msg.SetTimeout.startSetTimeout(builder);
-  msg.SetTimeout.addTimeout(builder, timeout);
-  const inner = msg.SetTimeout.endSetTimeout(builder);
-  const res = sendSync(builder, msg.Any.SetTimeout, inner);
-  assert(res == null);
-  // Remember when when the global timer will fire.
+  msg.GlobalTimer.startGlobalTimer(builder);
+  msg.GlobalTimer.addTimeout(builder, timeout);
+  const inner = msg.GlobalTimer.endGlobalTimer(builder);
   globalTimeoutDue = due;
+  await sendAsync(builder, msg.Any.GlobalTimer, inner);
+  // eslint-disable-next-line @typescript-eslint/no-use-before-define
+  fireTimers();
 }
 
-function schedule(timer: Timer, now: number) {
+function setOrClearGlobalTimeout(due: number | null, now: number): void {
+  if (due == null) {
+    clearGlobalTimeout();
+  } else {
+    setGlobalTimeout(due, now);
+  }
+}
+
+function schedule(timer: Timer, now: number): void {
   assert(!timer.scheduled);
   assert(now <= timer.due);
   // Find or create the list of timers that will fire at point-in-time `due`.
@@ -79,11 +86,11 @@ function schedule(timer: Timer, now: number) {
   // If the new timer is scheduled to fire before any timer that existed before,
   // update the global timeout to reflect this.
   if (globalTimeoutDue === null || globalTimeoutDue > timer.due) {
-    setGlobalTimeout(timer.due, now);
+    setOrClearGlobalTimeout(timer.due, now);
   }
 }
 
-function unschedule(timer: Timer) {
+function unschedule(timer: Timer): void {
   if (!timer.scheduled) {
     return;
   }
@@ -101,7 +108,7 @@ function unschedule(timer: Timer) {
         nextTimerDue = Number(key);
         break;
       }
-      setGlobalTimeout(nextTimerDue, getTime());
+      setOrClearGlobalTimeout(nextTimerDue, getTime());
     }
   } else {
     // Multiple timers that are due at the same point in time.
@@ -112,7 +119,7 @@ function unschedule(timer: Timer) {
   }
 }
 
-function fire(timer: Timer) {
+function fire(timer: Timer): void {
   // If the timer isn't found in the ID map, that means it has been cancelled
   // between the timer firing and the promise callback (this function).
   if (!idMap.has(timer.id)) {
@@ -135,7 +142,7 @@ function fire(timer: Timer) {
   callback();
 }
 
-function fireTimers() {
+function fireTimers(): void {
   const now = getTime();
   // Bail out if we're not expecting the global timer to fire (yet).
   if (globalTimeoutDue === null || now < globalTimeoutDue) {
@@ -166,12 +173,13 @@ function fireTimers() {
       Promise.resolve(timer).then(fire);
     }
   }
+
   // Update the global alarm to go off when the first-up timer that hasn't fired
   // yet is due.
-  setGlobalTimeout(nextTimerDue, now);
+  setOrClearGlobalTimeout(nextTimerDue, now);
 }
 
-export type Args = any[]; // tslint:disable-line:no-any
+export type Args = unknown[];
 
 function setTimer(
   cb: (...args: Args) => void,
@@ -230,7 +238,7 @@ export function setInterval(
   return setTimer(cb, delay, args, true);
 }
 
-/** Clears a previously set timer by id. */
+/** Clears a previously set timer by id. AKA clearTimeout and clearInterval. */
 export function clearTimer(id: number): void {
   const timer = idMap.get(id);
   if (timer === undefined) {

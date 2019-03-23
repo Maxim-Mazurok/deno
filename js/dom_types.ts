@@ -15,6 +15,8 @@ See the Apache Version 2.0 License for specific language governing permissions
 and limitations under the License.
 *******************************************************************************/
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 export type BufferSource = ArrayBufferView | ArrayBuffer;
 
 export type HeadersInit =
@@ -50,7 +52,6 @@ export interface DomIterable<K, V> {
   [Symbol.iterator](): IterableIterator<[K, V]>;
   forEach(
     callback: (value: V, key: K, parent: this) => void,
-    // tslint:disable-next-line:no-any
     thisArg?: any
   ): void;
 }
@@ -129,7 +130,6 @@ export interface URLSearchParams {
    */
   forEach(
     callbackfn: (value: string, key: string, parent: URLSearchParams) => void,
-    // tslint:disable-next-line:no-any
     thisArg?: any
   ): void;
 }
@@ -145,7 +145,6 @@ export interface EventInit {
 }
 
 export interface CustomEventInit extends EventInit {
-  // tslint:disable-next-line:no-any
   detail?: any;
 }
 
@@ -188,13 +187,11 @@ export interface Event {
 }
 
 export interface CustomEvent extends Event {
-  // tslint:disable-next-line:no-any
   readonly detail: any;
   initCustomEvent(
     type: string,
     bubbles?: boolean,
     cancelable?: boolean,
-    // tslint:disable-next-line:no-any
     detail?: any | null
   ): void;
 }
@@ -228,11 +225,9 @@ export interface AddEventListenerOptions extends EventListenerOptions {
 
 interface AbortSignal extends EventTarget {
   readonly aborted: boolean;
-  // tslint:disable-next-line:no-any
   onabort: ((this: AbortSignal, ev: ProgressEvent) => any) | null;
   addEventListener<K extends keyof AbortSignalEventMap>(
     type: K,
-    // tslint:disable-next-line:no-any
     listener: (this: AbortSignal, ev: AbortSignalEventMap[K]) => any,
     options?: boolean | AddEventListenerOptions
   ): void;
@@ -243,7 +238,6 @@ interface AbortSignal extends EventTarget {
   ): void;
   removeEventListener<K extends keyof AbortSignalEventMap>(
     type: K,
-    // tslint:disable-next-line:no-any
     listener: (this: AbortSignal, ev: AbortSignalEventMap[K]) => any,
     options?: boolean | EventListenerOptions
   ): void;
@@ -266,7 +260,6 @@ export interface EventListenerObject {
 
 export interface ReadableStreamReader {
   cancel(): Promise<void>;
-  // tslint:disable-next-line:no-any
   read(): Promise<any>;
   releaseLock(): void;
 }
@@ -321,7 +314,6 @@ export interface Body {
   /** Takes a `Response` stream and reads it to completion. It returns a promise
    * that resolves with the result of parsing the body text as JSON.
    */
-  // tslint:disable-next-line:no-any
   json(): Promise<any>;
   /** Takes a `Response` stream and reads it to completion. It returns a promise
    * that resolves with a `USVString` (text).
@@ -363,7 +355,6 @@ export interface Headers extends DomIterable<string, string> {
   values(): IterableIterator<string>;
   forEach(
     callbackfn: (value: string, key: string, parent: this) => void,
-    // tslint:disable-next-line:no-any
     thisArg?: any
   ): void;
   /** The Symbol.iterator well-known symbol specifies the default
@@ -427,7 +418,6 @@ export interface RequestInit {
   referrer?: string;
   referrerPolicy?: ReferrerPolicy;
   signal?: AbortSignal | null;
-  // tslint:disable-next-line:no-any
   window?: any;
 }
 
@@ -535,4 +525,74 @@ export interface Response extends Body {
   readonly url: string;
   /** Creates a clone of a `Response` object. */
   clone(): Response;
+}
+
+export interface Location {
+  /**
+   * Returns a DOMStringList object listing the origins of the ancestor browsing
+   * contexts, from the parent browsing context to the top-level browsing
+   * context.
+   */
+  readonly ancestorOrigins: string[];
+  /**
+   * Returns the Location object's URL's fragment (includes leading "#" if
+   * non-empty).
+   * Can be set, to navigate to the same URL with a changed fragment (ignores
+   * leading "#").
+   */
+  hash: string;
+  /**
+   * Returns the Location object's URL's host and port (if different from the
+   * default port for the scheme).  Can be set, to navigate to the same URL with
+   * a changed host and port.
+   */
+  host: string;
+  /**
+   * Returns the Location object's URL's host.  Can be set, to navigate to the
+   * same URL with a changed host.
+   */
+  hostname: string;
+  /**
+   * Returns the Location object's URL.  Can be set, to navigate to the given
+   * URL.
+   */
+  href: string;
+  /** Returns the Location object's URL's origin. */
+  readonly origin: string;
+  /**
+   * Returns the Location object's URL's path.
+   * Can be set, to navigate to the same URL with a changed path.
+   */
+  pathname: string;
+  /**
+   * Returns the Location object's URL's port.
+   * Can be set, to navigate to the same URL with a changed port.
+   */
+  port: string;
+  /**
+   * Returns the Location object's URL's scheme.
+   * Can be set, to navigate to the same URL with a changed scheme.
+   */
+  protocol: string;
+  /**
+   * Returns the Location object's URL's query (includes leading "?" if
+   * non-empty). Can be set, to navigate to the same URL with a changed query
+   * (ignores leading "?").
+   */
+  search: string;
+  /**
+   * Navigates to the given URL.
+   */
+  assign(url: string): void;
+  /**
+   * Reloads the current page.
+   */
+  reload(): void;
+  /** @deprecated */
+  reload(forcedReload: boolean): void;
+  /**
+   * Removes the current page from the session history and navigates to the
+   * given URL.
+   */
+  replace(url: string): void;
 }

@@ -11,6 +11,7 @@ export {
   stderr,
   read,
   write,
+  seek,
   close,
   OpenMode
 } from "./files";
@@ -18,6 +19,7 @@ export {
   copy,
   toAsyncIterator,
   ReadResult,
+  SeekMode,
   Reader,
   Writer,
   Closer,
@@ -48,7 +50,12 @@ export { symlinkSync, symlink } from "./symlink";
 export { writeFileSync, writeFile, WriteFileOptions } from "./write_file";
 export { ErrorKind, DenoError } from "./errors";
 export { libdeno } from "./libdeno";
-export { platform } from "./platform";
+export {
+  permissions,
+  revokePermission,
+  Permission,
+  Permissions
+} from "./permissions";
 export { truncateSync, truncate } from "./truncate";
 export { FileInfo } from "./file_info";
 export { connect, dial, listen, Listener, Conn } from "./net";
@@ -56,6 +63,8 @@ export { metrics, Metrics } from "./metrics";
 export { resources } from "./resources";
 export { run, RunOptions, Process, ProcessStatus } from "./process";
 export { inspect } from "./console";
+export { build, platform, OperatingSystem, Arch } from "./build";
+export { version } from "./version";
 export const args: string[] = [];
 
 // TODO Don't expose Console nor stringifyArgs.

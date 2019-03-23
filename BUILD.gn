@@ -13,11 +13,14 @@ group("default") {
     ":deno",
     ":hyper_hello",
     ":test_rs",
+    "core:default",
     "libdeno:test_cc",
   ]
 }
 
 main_extern = [
+  "core:deno_core",
+
   "$rust_build:ansi_term",
   "$rust_build:atty",
   "$rust_build:dirs",
@@ -54,11 +57,13 @@ ts_sources = [
   "js/assets.ts",
   "js/blob.ts",
   "js/buffer.ts",
+  "js/build.ts",
   "js/chmod.ts",
   "js/console_table.ts",
   "js/compiler.ts",
   "js/console.ts",
   "js/copy_file.ts",
+  "js/core.ts",
   "js/custom_event.ts",
   "js/deno.ts",
   "js/dir.ts",
@@ -74,12 +79,12 @@ ts_sources = [
   "js/files.ts",
   "js/flatbuffers.ts",
   "js/form_data.ts",
-  "js/global_eval.ts",
   "js/globals.ts",
   "js/headers.ts",
   "js/io.ts",
   "js/libdeno.ts",
   "js/lib.web_assembly.d.ts",
+  "js/location.ts",
   "js/main.ts",
   "js/make_temp_dir.ts",
   "js/metrics.ts",
@@ -87,7 +92,7 @@ ts_sources = [
   "js/mock_builtin.js",
   "js/net.ts",
   "js/os.ts",
-  "js/platform.ts",
+  "js/permissions.ts",
   "js/plugins.d.ts",
   "js/process.ts",
   "js/read_dir.ts",
@@ -106,9 +111,11 @@ ts_sources = [
   "js/url.ts",
   "js/url_search_params.ts",
   "js/util.ts",
+  "js/window.ts",
   "js/workers.ts",
   "js/write_file.ts",
   "js/performance.ts",
+  "js/version.ts",
   "tsconfig.json",
 
   # Listing package.json and yarn.lock as sources ensures the bundle is rebuilt
@@ -128,13 +135,26 @@ group("deno_deps") {
   ]
 }
 
+# Optimized dependencies for cross compiled builds.
+# This can be removed once we get snapshots into cross compiled builds.
+group("deno_deps_cross") {
+  testonly = true
+  deps = [
+    ":compiler_bundle",
+    ":main_bundle",
+    ":msg_rs",
+    "libdeno:libdeno_static_lib",
+    "libdeno:test_cc",
+  ]
+}
+
 # Reads the cargo info from Cargo.toml
 deno_cargo_info = exec_script("build_extra/rust/get_cargo_info.py",
                               [ rebase_path("Cargo.toml", root_build_dir) ],
                               "json")
 
 rust_executable("deno") {
-  source_root = "src/main.rs"
+  source_root = "cli/main.rs"
   extern = main_extern
   deps = [
     ":deno_deps",
@@ -150,7 +170,7 @@ rust_executable("deno") {
 }
 
 rust_test("test_rs") {
-  source_root = "src/main.rs"
+  source_root = "cli/main.rs"
   extern = main_extern
   deps = [
     ":deno_deps",
@@ -182,6 +202,12 @@ run_node("deno_runtime_declaration") {
   deps = [
     ":msg_ts",
   ]
+  inputs = ts_sources + [
+             "tools/ts_library_builder/tsconfig.json",
+             "tools/ts_library_builder/main.ts",
+             "tools/ts_library_builder/build_library.ts",
+             "tools/ts_library_builder/ast_util.ts",
+           ]
   args = [
     rebase_path("node_modules/ts-node/dist/bin.js", root_build_dir),
     "--project",
@@ -195,7 +221,7 @@ run_node("deno_runtime_declaration") {
     "--buildPath",
     rebase_path(root_build_dir, root_build_dir),
     "--outFile",
-    rebase_path("$out_dir/lib/lib.deno_runtime.d.ts", root_build_dir),
+    rebase_path(outputs[0], root_build_dir),
     "--silent",
   ]
   if (is_debug) {
@@ -209,6 +235,10 @@ bundle("main_bundle") {
   deps = [
     ":deno_runtime_declaration",
     ":msg_ts",
+    ":write_gn_args",
+  ]
+  data = [
+    "$target_gen_dir/gn_args.txt",
   ]
 }
 
@@ -218,18 +248,22 @@ bundle("compiler_bundle") {
   deps = [
     ":deno_runtime_declaration",
     ":msg_ts",
+    ":write_gn_args",
+  ]
+  data = [
+    "$target_gen_dir/gn_args.txt",
   ]
 }
 
 ts_flatbuffer("msg_ts") {
   sources = [
-    "src/msg.fbs",
+    "cli/msg.fbs",
   ]
 }
 
 rust_flatbuffer("msg_rs") {
   sources = [
-    "src/msg.fbs",
+    "cli/msg.fbs",
   ]
 }
 
@@ -247,4 +281,12 @@ snapshot("snapshot_compiler") {
   deps = [
     ":compiler_bundle",
   ]
+}
+
+action("write_gn_args") {
+  script = "//tools/write_gn_args.py"
+  outputs = [
+    "$target_gen_dir/gn_args.txt",
+  ]
+  args = [ rebase_path(outputs[0], root_build_dir) ]
 }

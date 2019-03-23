@@ -1,9 +1,9 @@
 // Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
 import * as ts from "typescript";
 import * as msg from "gen/msg_generated";
+import { window } from "./window";
 import { assetSourceCode } from "./assets";
 import { Console } from "./console";
-import { globalEval } from "./global_eval";
 import { libdeno } from "./libdeno";
 import * as os from "./os";
 import { TextDecoder, TextEncoder } from "./text_encoding";
@@ -14,9 +14,6 @@ import { assert, log, notImplemented } from "./util";
 const EOL = "\n";
 const ASSETS = "$asset$";
 const LIB_RUNTIME = `${ASSETS}/lib.deno_runtime.d.ts`;
-
-// A reference to the global scope
-const window = globalEval("this");
 
 // An instance of console
 const console = new Console(libdeno.print);
@@ -55,8 +52,7 @@ interface CompilerLookup {
  * easily mocked.
  */
 interface Os {
-  codeCache: typeof os.codeCache;
-  codeFetch: typeof os.codeFetch;
+  fetchModuleMetaData: typeof os.fetchModuleMetaData;
   exit: typeof os.exit;
 }
 
@@ -65,7 +61,6 @@ interface Os {
  */
 interface Ts {
   createLanguageService: typeof ts.createLanguageService;
-  /* tslint:disable-next-line:max-line-length */
   formatDiagnosticsWithColorAndContext: typeof ts.formatDiagnosticsWithColorAndContext;
   formatDiagnostics: typeof ts.formatDiagnostics;
 }
@@ -251,7 +246,10 @@ class Compiler implements ts.LanguageServiceHost, ts.FormatDiagnosticsHost {
     } else {
       // We query Rust with a CodeFetch message. It will load the sourceCode,
       // and if there is any outputCode cached, will return that as well.
-      const fetchResponse = this._os.codeFetch(moduleSpecifier, containingFile);
+      const fetchResponse = this._os.fetchModuleMetaData(
+        moduleSpecifier,
+        containingFile
+      );
       moduleId = fetchResponse.moduleName;
       fileName = fetchResponse.filename;
       mediaType = fetchResponse.mediaType;
@@ -307,22 +305,26 @@ class Compiler implements ts.LanguageServiceHost, ts.FormatDiagnosticsHost {
 
   // Deno specific compiler API
 
-  /** Retrieve the output of the TypeScript compiler for a given module and
-   * cache the result.
+  /** Retrieve the output of the TypeScript compiler for a given module.
    */
   compile(
     moduleSpecifier: ModuleSpecifier,
     containingFile: ContainingFile
-  ): ModuleMetaData {
+  ): { outputCode: OutputCode; sourceMap: SourceMap } {
     this._log("compiler.compile", { moduleSpecifier, containingFile });
     const moduleMetaData = this._resolveModule(moduleSpecifier, containingFile);
     const { fileName, mediaType, moduleId, sourceCode } = moduleMetaData;
     this._scriptFileNames = [fileName];
     console.warn("Compiling", moduleId);
+    let outputCode: string;
+    let sourceMap = "";
     // Instead of using TypeScript to transpile JSON modules, we will just do
     // it directly.
     if (mediaType === msg.MediaType.Json) {
-      moduleMetaData.outputCode = jsonEsmTemplate(sourceCode, fileName);
+      outputCode = moduleMetaData.outputCode = jsonEsmTemplate(
+        sourceCode,
+        fileName
+      );
     } else {
       const service = this._service;
       assert(
@@ -373,20 +375,14 @@ class Compiler implements ts.LanguageServiceHost, ts.FormatDiagnosticsHost {
         outputFile.name.endsWith(".js"),
         "Expected second emitted file to be JavaScript"
       );
-      moduleMetaData.outputCode = `${
+      outputCode = moduleMetaData.outputCode = `${
         outputFile.text
       }\n//# sourceURL=${fileName}`;
-      moduleMetaData.sourceMap = sourceMapFile.text;
+      sourceMap = moduleMetaData.sourceMap = sourceMapFile.text;
     }
 
     moduleMetaData.scriptVersion = "1";
-    this._os.codeCache(
-      fileName,
-      sourceCode,
-      moduleMetaData.outputCode,
-      moduleMetaData.sourceMap
-    );
-    return moduleMetaData;
+    return { outputCode, sourceMap };
   }
 
   // TypeScript Language Service and Format Diagnostic Host API
@@ -480,15 +476,7 @@ class Compiler implements ts.LanguageServiceHost, ts.FormatDiagnosticsHost {
     this._log("resolveModuleNames()", { moduleNames, containingFile });
     const resolvedModuleNames: ts.ResolvedModuleFull[] = [];
     for (const moduleName of moduleNames) {
-      let moduleMetaData: ModuleMetaData;
-      if (moduleName === "deno") {
-        // builtin modules are part of the runtime lib
-        moduleMetaData = this._getModuleMetaData(LIB_RUNTIME)!;
-      } else if (moduleName === "typescript") {
-        moduleMetaData = this._getModuleMetaData(`${ASSETS}/typescript.d.ts`)!;
-      } else {
-        moduleMetaData = this._resolveModule(moduleName, containingFile);
-      }
+      const moduleMetaData = this._resolveModule(moduleName, containingFile);
       // According to the interface we shouldn't return `undefined` but if we
       // fail to return the same length of modules to those we cannot resolve
       // then TypeScript fails on an assertion that the lengths can't be
@@ -532,15 +520,14 @@ window.compilerMain = function compilerMain() {
     const json = decoder.decode(data);
     const { specifier, referrer } = JSON.parse(json) as CompilerLookup;
 
-    const moduleMetaData = compiler.compile(specifier, referrer);
+    const result = compiler.compile(specifier, referrer);
 
-    const responseJson = JSON.stringify(moduleMetaData);
+    const responseJson = JSON.stringify(result);
     const response = encoder.encode(responseJson);
     postMessage(response);
   };
 };
 
-/* tslint:disable-next-line:no-default-export */
-export default function denoMain() {
+export default function denoMain(): void {
   os.start("TS");
 }

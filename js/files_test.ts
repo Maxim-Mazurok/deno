@@ -1,10 +1,10 @@
 // Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
-import { test, testPerm, assert, assertEqual } from "./test_util.ts";
+import { test, testPerm, assert, assertEquals } from "./test_util.ts";
 
 test(function filesStdioFileDescriptors() {
-  assertEqual(Deno.stdin.rid, 0);
-  assertEqual(Deno.stdout.rid, 1);
-  assertEqual(Deno.stderr.rid, 2);
+  assertEquals(Deno.stdin.rid, 0);
+  assertEquals(Deno.stdout.rid, 1);
+  assertEquals(Deno.stderr.rid, 2);
 });
 
 testPerm({ read: true }, async function filesCopyToStdout() {
@@ -13,7 +13,7 @@ testPerm({ read: true }, async function filesCopyToStdout() {
   assert(file.rid > 2);
   const bytesWritten = await Deno.copy(Deno.stdout, file);
   const fileSize = Deno.statSync(filename).len;
-  assertEqual(bytesWritten, fileSize);
+  assertEquals(bytesWritten, fileSize);
   console.log("bytes written", bytesWritten);
 });
 
@@ -26,7 +26,7 @@ testPerm({ read: true }, async function filesToAsyncIterator() {
     totalSize += buf.byteLength;
   }
 
-  assertEqual(totalSize, 12);
+  assertEquals(totalSize, 12);
 });
 
 testPerm({ write: false }, async function writePermFailure() {
@@ -40,8 +40,8 @@ testPerm({ write: false }, async function writePermFailure() {
       err = e;
     }
     assert(!!err);
-    assertEqual(err.kind, Deno.ErrorKind.PermissionDenied);
-    assertEqual(err.name, "PermissionDenied");
+    assertEquals(err.kind, Deno.ErrorKind.PermissionDenied);
+    assertEquals(err.name, "PermissionDenied");
   }
 });
 
@@ -51,8 +51,8 @@ testPerm({ read: false }, async function readPermFailure() {
     await Deno.open("package.json", "r");
   } catch (e) {
     caughtError = true;
-    assertEqual(e.kind, Deno.ErrorKind.PermissionDenied);
-    assertEqual(e.name, "PermissionDenied");
+    assertEquals(e.kind, Deno.ErrorKind.PermissionDenied);
+    assertEquals(e.name, "PermissionDenied");
   }
   assert(caughtError);
 });
@@ -68,8 +68,8 @@ testPerm({ write: false, read: false }, async function readWritePermFailure() {
       err = e;
     }
     assert(!!err);
-    assertEqual(err.kind, Deno.ErrorKind.PermissionDenied);
-    assertEqual(err.name, "PermissionDenied");
+    assertEquals(err.kind, Deno.ErrorKind.PermissionDenied);
+    assertEquals(err.name, "PermissionDenied");
   }
 });
 
@@ -101,11 +101,11 @@ testPerm({ read: true, write: true }, async function openModeWrite() {
   // assert file was created
   let fileInfo = Deno.statSync(filename);
   assert(fileInfo.isFile());
-  assertEqual(fileInfo.len, 0);
+  assertEquals(fileInfo.len, 0);
   // write some data
   await file.write(data);
   fileInfo = Deno.statSync(filename);
-  assertEqual(fileInfo.len, 13);
+  assertEquals(fileInfo.len, 13);
   // assert we can't read from file
   let thrown = false;
   try {
@@ -121,7 +121,7 @@ testPerm({ read: true, write: true }, async function openModeWrite() {
   file = await Deno.open(filename, "w");
   file.close();
   const fileSize = Deno.statSync(filename).len;
-  assertEqual(fileSize, 0);
+  assertEquals(fileSize, 0);
   await Deno.remove(tempDir, { recursive: true });
 });
 
@@ -135,21 +135,67 @@ testPerm({ read: true, write: true }, async function openModeWriteRead() {
   // assert file was created
   let fileInfo = Deno.statSync(filename);
   assert(fileInfo.isFile());
-  assertEqual(fileInfo.len, 0);
+  assertEquals(fileInfo.len, 0);
   // write some data
   await file.write(data);
   fileInfo = Deno.statSync(filename);
-  assertEqual(fileInfo.len, 13);
+  assertEquals(fileInfo.len, 13);
 
-  // TODO: this test is not working, I expect because
-  //  file handle points to the end of file, but ATM
-  //  deno has no seek implementation on Rust side
-  // assert file can be read
-  // const buf = new Uint8Array(20);
-  // const result = await file.read(buf);
-  // console.log(result.eof, result.nread);
-  // assertEqual(result.nread, 13);
-  // file.close();
+  const buf = new Uint8Array(20);
+  await file.seek(0, Deno.SeekMode.SEEK_START);
+  const result = await file.read(buf);
+  assertEquals(result.nread, 13);
+  file.close();
 
   await Deno.remove(tempDir, { recursive: true });
+});
+
+testPerm({ read: true }, async function seekStart() {
+  const filename = "tests/hello.txt";
+  const file = await Deno.open(filename);
+  // Deliberately move 1 step forward
+  await file.read(new Uint8Array(1)); // "H"
+  // Skipping "Hello "
+  await file.seek(6, Deno.SeekMode.SEEK_START);
+  const buf = new Uint8Array(6);
+  await file.read(buf);
+  const decoded = new TextDecoder().decode(buf);
+  assertEquals(decoded, "world!");
+});
+
+testPerm({ read: true }, async function seekCurrent() {
+  const filename = "tests/hello.txt";
+  const file = await Deno.open(filename);
+  // Deliberately move 1 step forward
+  await file.read(new Uint8Array(1)); // "H"
+  // Skipping "ello "
+  await file.seek(5, Deno.SeekMode.SEEK_CURRENT);
+  const buf = new Uint8Array(6);
+  await file.read(buf);
+  const decoded = new TextDecoder().decode(buf);
+  assertEquals(decoded, "world!");
+});
+
+testPerm({ read: true }, async function seekEnd() {
+  const filename = "tests/hello.txt";
+  const file = await Deno.open(filename);
+  await file.seek(-6, Deno.SeekMode.SEEK_END);
+  const buf = new Uint8Array(6);
+  await file.read(buf);
+  const decoded = new TextDecoder().decode(buf);
+  assertEquals(decoded, "world!");
+});
+
+testPerm({ read: true }, async function seekMode() {
+  const filename = "tests/hello.txt";
+  const file = await Deno.open(filename);
+  let err;
+  try {
+    await file.seek(1, -1);
+  } catch (e) {
+    err = e;
+  }
+  assert(!!err);
+  assertEquals(err.kind, Deno.ErrorKind.InvalidSeekMode);
+  assertEquals(err.name, "InvalidSeekMode");
 });
